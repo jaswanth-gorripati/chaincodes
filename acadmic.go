@@ -1,19 +1,3 @@
-/*
-Copyright IBM Corp. 2016 All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package main
 
 
@@ -23,11 +7,10 @@ import (
      "encoding/json"
      "strconv"
      "time"
-     "strings"
 
 
 	"github.com/hyperledger/fabric/core/chaincode/shim"
-	//"github.com/hyperledger/fabric/core/chaincode/lib/cid"
+	"github.com/hyperledger/fabric/core/chaincode/lib/cid"
 	pb "github.com/hyperledger/fabric/protos/peer"
 )
 
@@ -46,6 +29,7 @@ type studentrequest struct{
 	CollegeName string `json:"clgname"`
 	Location string `json:"location"`
 	University_Board string `json:"board"`
+	RequestType string `json:requestType`
 	Timeregistred time.Time `json:"timeenrolled"`
 	Status string `json:"status"`  
 	Remarks string    `json:"remarks"`
@@ -77,8 +61,8 @@ func (t *Academicchaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Response
 		return t.Init(stub)	
 	}else if function == "RequestEnroll" {
 		return RequestEnroll(stub, args);
-	}else if function =="getdetailsbyboard"{
-		return getdetailsbyboard(stub,args)
+	}else if function =="getallrequests"{
+		return getallrequests(stub,args)
 	}else if function=="hypernymprocess"{
 		return hypernymprocess(stub,args)
 	}
@@ -90,35 +74,65 @@ func (t *Academicchaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Response
 
 func  RequestEnroll(stub shim.ChaincodeStubInterface, args []string) pb.Response {
 
-	if len(args)!=7{
+	if len(args)%7 != 0 {
 		return shim.Error("The Requested  Degree not full fill the all Requriments")
 	}
-	studentId:=args[0]
-	degree  :=args[1]
-	percentage,err :=strconv.ParseFloat(args[2],64)
-	yop:=args[3]
-	clgname:=args[4]
-	localArea:= args[5]
-	university_board:=args[6]
-	stauts:="pending" 
-	Current_date:=time.Now().Local()
-
-	studentrequest:=studentrequest{studentId,degree,percentage,yop,clgname,localArea,university_board,Current_date,stauts,""}
-  
-    studentrequestmarshall,err:=json.Marshal(studentrequest)
-
-	if err !=nil{
-		logger.Errorf("error occured while converting to json")
-		return shim.Error(err.Error())
+	val,ok,err := cid.GetAttributeValue(stub,"accountType");
+	if err != nil {
+		shim.Error("There was an error trying to retrieve accountType attribute");
 	}
-
-
-    err=stub.PutState(""+studentId+"_"+degree+"",studentrequestmarshall)
-    if err!=nil{
-    	logger.Errorf("error occured while updating  to ledger")
-		return shim.Error(err.Error())
-    }
-
+	if !ok {
+		shim.Error("The client identity does not possess accountType attribute");
+	}
+	if(val != "student"){
+		shim.Error("Authorisation Failed : Not a Student account To Request")
+	}
+	val1,ok,err := cid.GetAttributeValue(stub,"id")
+	if err != nil {
+		shim.Error("There was an error trying to retrieve accountType attribute");
+	}
+	if !ok {
+		shim.Error("The student identity does not possess accountType attribute");
+	}
+	if(val1 == ""){
+		shim.Error("NO id Found")
+	}
+	studentId:= val1;
+	stauts:="pending" 
+	Current_date:=time.Now().Local();
+	var request []studentrequest ;
+	for i:=0;i<len(args);i+=7{
+		degree  := args[i]
+		percentage,err :=strconv.ParseFloat(args[i+1],64)
+		if err!=nil{
+			shim.Error("cannot convert percentage")
+		}
+		yop:=args[i+2]
+		clgname:=args[i+3]
+		localArea:= args[i+4]
+		university_board:=args[i+5]
+		requestType := args[i+6]
+		temp := studentrequest{studentId,degree,percentage,yop,clgname,localArea,university_board,requestType,Current_date,stauts,""}
+		request = append(request,temp);
+	}
+	
+	//studentrequest:=studentrequest{studentId,degree,percentage,yop,clgname,localArea,university_board,Current_date,stauts,""}
+	for j:=0;j<len(request);j++{
+		studentrequestmarshall,err:=json.Marshal(request[j])
+		
+			if err !=nil{
+				logger.Errorf("error occured while converting to json")
+				return shim.Error(err.Error())
+			}
+		
+		
+			err=stub.PutState(""+request[j].StudentId+"_"+request[j].Degree+"",studentrequestmarshall)
+			if err!=nil{
+				logger.Errorf("error occured while updating  to ledger")
+				return shim.Error(err.Error())
+			}
+		
+	}
 
      logger.Info("details are entered")
      return shim.Success(nil);
@@ -130,19 +144,33 @@ func  RequestEnroll(stub shim.ChaincodeStubInterface, args []string) pb.Response
 func hypernymprocess(stub shim.ChaincodeStubInterface,args []string) pb.Response{
 
      
-     if len(args)<3{
-     	
-     	return shim.Error("the arguments which passed or not upto the mark")
-     }
-    
-    studentId:=args[0]
+	if len(args)<3{
+		return shim.Error("the arguments which passed or not upto the mark")
+	}
+	val,ok,err := cid.GetAttributeValue(stub,"accountType");
+	if err != nil {
+		shim.Error("There was an error trying to retrieve accountType attribute");
+	}
+	if !ok {
+		shim.Error("The client identity does not possess accountType attribute");
+	}
+	if(val != "universityStaff"){
+		shim.Error("not Authorized");
+	}
+	if(val == "universityStaff"){
+		val1,_,_ := cid.GetAttributeValue(stub,"isAdmin");
+		if(val1 != "true"){
+			shim.Error("Authorisation Failed : No right to approve or Denie")
+		}
+	}
+	studentId:=args[0]
     degree:=args[1]
     status:=args[2]
     remarks:=args[3]
 
     var variable=""+studentId+"_"+degree+""
     //strconv.string(variable)
-      studentrequestjson:=studentrequest{}
+    studentrequestjson:=studentrequest{}
 
     newstudentrequest,err:=stub.GetState(variable)
 
@@ -155,7 +183,7 @@ func hypernymprocess(stub shim.ChaincodeStubInterface,args []string) pb.Response
 
     Current_date:=time.Now().Local()
     studentupdaterespnose:=studentrequest{studentrequestjson.StudentId,studentrequestjson.Degree,studentrequestjson.Percentage,studentrequestjson.YearOfPassOut,
-    	studentrequestjson.CollegeName,studentrequestjson.Location,studentrequestjson.University_Board,
+    	studentrequestjson.CollegeName,studentrequestjson.Location,studentrequestjson.University_Board,studentrequestjson.RequestType,
     	Current_date,status,remarks}
 
     studentresponsemarshall,err:=json.Marshal(studentupdaterespnose)
@@ -177,16 +205,31 @@ func hypernymprocess(stub shim.ChaincodeStubInterface,args []string) pb.Response
      return shim.Success(nil);
  }
 
-func getdetailsbyboard(stub shim.ChaincodeStubInterface,args []string) pb.Response{
+func getallrequests(stub shim.ChaincodeStubInterface,args []string) pb.Response{
 
-     if len(args)<1{
+	mspid, err := cid.GetMSPID(stub);
+	fmt.Printf("got MSP : %v",mspid);
 
-     	return shim.Error("the details did not get expecting one argument")
-     }
-
-    board_university:= strings.ToLower(args[0])
-	queryString := fmt.Sprintf("{\"selector\":{\"board\":\"%s\"}}}",board_university)
-	
+	val,ok,err := cid.GetAttributeValue(stub,"accountType");
+	if err != nil {
+		shim.Error("There was an error trying to retrieve accountType attribute");
+	 }
+	 if !ok {
+		shim.Error("The client identity does not possess accountType attribute");
+	 }
+	 queryString := "";
+	 fmt.Printf("account Type : %v",val)
+	if(val == "student" || val =="employee"){
+		val1,_,_ := cid.GetAttributeValue(stub,"id");
+		fmt.Printf("got request for ID  = %v",val1);
+		queryString = fmt.Sprintf("{\"selector\":{\"studentId\":\"%s\"}}}",val1)
+	}else if(val == "universityStaff"){
+		val2,_,_ := cid.GetAttributeValue(stub,"worksin");
+		queryString = fmt.Sprintf("{\"selector\":{\"board\":\"%s\"}}}",val2)
+	}else if(val == "employer"){
+		shim.Error("employer cannot request this function");
+	}
+	fmt.Printf("querystring = %v",queryString)
 	resultsIterator,err:= stub.GetQueryResult(queryString)
 	if err != nil {
 		return shim.Error(err.Error())
@@ -208,7 +251,7 @@ func getdetailsbyboard(stub shim.ChaincodeStubInterface,args []string) pb.Respon
 			buffer.WriteString(",")
 		}
 		 
-		buffer.WriteString("{")
+		buffer.WriteString("{\"Details\":")
      	// Record is a JSON object, so we write as-is
 		buffer.WriteString(string(queryResponse.Value))
 		buffer.WriteString("}")
@@ -219,5 +262,3 @@ func getdetailsbyboard(stub shim.ChaincodeStubInterface,args []string) pb.Respon
    	fmt.Printf("- getQueryResultForQueryString queryResult:\n%s\n", buffer.String())
 	return shim.Success(buffer.Bytes()) 
 }
-
-

@@ -1,19 +1,3 @@
-/*
-Copyright IBM Corp. 2016 All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package main
 
 
@@ -23,11 +7,10 @@ import (
      "encoding/json"
      "strconv"
      "time"
-     "strings"
 
 
 	"github.com/hyperledger/fabric/core/chaincode/shim"
-	//"github.com/hyperledger/fabric/core/chaincode/lib/cid"
+	"github.com/hyperledger/fabric/core/chaincode/lib/cid"
 	pb "github.com/hyperledger/fabric/protos/peer"
 )
 
@@ -40,7 +23,7 @@ type Professionalchaincode struct{
 type ExperienceReport struct{
 
 	EmployeeId string `json:"employeeId"`
-	Designation string `json:"desgination"`
+	Designation string `json:"designation"`
 	YearOfJoining time.Time `json:"yoj"`
 	CompanyName string `json:"companyname"`
 	Location string `json:"location"`
@@ -50,6 +33,7 @@ type ExperienceReport struct{
     DateoFReliving time.Time `json:"dor"`
 	Status string      `json:"status"`  
 	Remarks string     `json:"remarks"`
+	RequestType string `json:requestType`
 
 }
 
@@ -57,18 +41,17 @@ type ExperienceReport struct{
 var logger = shim.NewLogger("Professional_CC")
 
 func main() {
-	   err := shim.Start(new(Professionalchaincode))
-	   if err != nil {
-	   logger.Errorf("Error while Initializing Professional chaincode- %s",err)
-	    }
+	err := shim.Start(new(Professionalchaincode))
+	if err != nil {
+		logger.Errorf("Error while Initializing Professional chaincode- %s",err)
+	}
 }
 
 func(t *Professionalchaincode) Init(stub shim.ChaincodeStubInterface) pb.Response {
-
-		logger.Info("########### Professional Chaincode Init ###########")
-     	fmt.Println("The Network as Been started by Professional smartcontract")
-    	fmt.Println("Ready To Take Approval and Requests for digital Expernice ")
-    	return shim.Success(nil)
+	logger.Info("########### Professional Chaincode Init ###########")
+	fmt.Println("The Network as Been started by Professional smartcontract")
+	fmt.Println("Ready To Take Approval and Requests for digital Expernice ")
+	return shim.Success(nil)
 }
 
 func (t *Professionalchaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
@@ -132,10 +115,8 @@ func diff(a, b time.Time) (year, month int) {
     if month < 0 {
         month += 12
         year--
-    }
-
-      
-      return
+    } 
+    return
 }
 
 func  ExperienceRequest(stub shim.ChaincodeStubInterface, args []string) pb.Response {
@@ -145,7 +126,13 @@ func  ExperienceRequest(stub shim.ChaincodeStubInterface, args []string) pb.Resp
 	}
 
     const shortForm = "2006-01-02"
-	EmployeeId :=args[0]
+	EmployeeId, ok, err := cid.GetAttributeValue(stub, "id")
+    if err !=nil{
+    	shim.Error(err.Error())
+	}else if !ok {
+		shim.Error("The client identity does not possess the attribute ");
+	}
+	RequestType := args[0]
 	Designation :=args[1]
 	YearOfJoining,err:= time.Parse(shortForm,args[2])
 	CompanyName :=args[3]
@@ -157,64 +144,63 @@ func  ExperienceRequest(stub shim.ChaincodeStubInterface, args []string) pb.Resp
 		return shim.Error(err.Error())
 	}
 	status:="pending" 
-	              	Current_date:=time.Now().Local()
+	Current_date:=time.Now().Local()
 
 
-              if StillWorking {
-                 
-                 fmt.Println(dor)
-                 fmt.Println(StillWorking)
-                 
-                year,month:=diff(YearOfJoining,Current_date)
-                year1:=strconv.Itoa(year)
-                month1:=strconv.Itoa(month)
-                working:=""+year1+"."+month1+""
-                exp,err:=strconv.ParseFloat(working,64)
-                if err!=nil{
-                     return shim.Error(err.Error())
-                           }        
-	                   
-                experiencereport:=ExperienceReport{EmployeeId,Designation,YearOfJoining,CompanyName,
-            	Location,exp,Current_date,StillWorking,dor,status,""}
-                employeerequestmarshall,err:=json.Marshal(experiencereport)
-                if err !=nil{
-		        logger.Errorf("error occured while converting to json")
-		             return shim.Error(err.Error())
-	                        }
-                 err=stub.PutState(""+EmployeeId+"_"+CompanyName+"",employeerequestmarshall)
-	        		    if err!=nil{
-			            	logger.Errorf("error occured while updating  to ledger")
-					      return shim.Error(err.Error())
-			            }
+	if StillWorking {
 
-              }
-        
-            year2,month2:=diff(YearOfJoining,dor)
-                year3:=strconv.Itoa(year2)
-                month3:=strconv.Itoa(month2)
-                working:=""+year3+"."+month3+""
-                exp,err:=strconv.ParseFloat(working,64)
-                if err!=nil{
-                     return shim.Error(err.Error())
-                           }        
-	           
-	         experiencereport:=ExperienceReport{EmployeeId,Designation,YearOfJoining,CompanyName,
-            	Location,exp,Current_date,StillWorking,dor,status,""}
-                employeerequestmarshall,err:=json.Marshal(experiencereport)
-                if err !=nil{
-		        logger.Errorf("error occured while converting to json")
-		             return shim.Error(err.Error())
-	                        }
-                 err=stub.PutState(""+EmployeeId+"_"+CompanyName+"",employeerequestmarshall)
-	        		    if err!=nil{
-			            	logger.Errorf("error occured while updating  to ledger")
-					      return shim.Error(err.Error())
-			            }
+		fmt.Println(dor)
+		fmt.Println(StillWorking)
+			
+		year,month:=diff(YearOfJoining,Current_date)
+		year1:=strconv.Itoa(year)
+		month1:=strconv.Itoa(month)
+		working:=""+year1+"."+month1+""
+		exp,err:=strconv.ParseFloat(working,64)
+		if err!=nil{
+			return shim.Error(err.Error())
+		}        
+			
+		experiencereport:=ExperienceReport{EmployeeId,Designation,YearOfJoining,CompanyName,
+		Location,exp,Current_date,StillWorking,dor,status,"",RequestType}
+		employeerequestmarshall,err:=json.Marshal(experiencereport)
+		if err !=nil{
+			logger.Errorf("error occured while converting to json")
+			return shim.Error(err.Error())
+		}
+		err=stub.PutState(""+EmployeeId+"_"+CompanyName+"",employeerequestmarshall)
+		if err!=nil{
+			logger.Errorf("error occured while updating  to ledger")
+			return shim.Error(err.Error())
+		}
+		return shim.Success(nil);
+	}else{
 
- 
+		year2,month2:=diff(YearOfJoining,dor)
+		year3:=strconv.Itoa(year2)
+		month3:=strconv.Itoa(month2)
+		working:=""+year3+"."+month3+""
+		exp,err:=strconv.ParseFloat(working,64)
+		if err!=nil{
+			return shim.Error(err.Error())
+		}        
 
-     logger.Info("details are entered")
-     return shim.Success(nil);
+		experiencereport:=ExperienceReport{EmployeeId,Designation,YearOfJoining,CompanyName,
+		Location,exp,Current_date,StillWorking,dor,status,"",RequestType}
+		employeerequestmarshall,err:=json.Marshal(experiencereport)
+		if err !=nil{
+			logger.Errorf("error occured while converting to json")
+			return shim.Error(err.Error())
+		}
+		err=stub.PutState(""+EmployeeId+"_"+CompanyName+"",employeerequestmarshall)
+		if err!=nil{
+			logger.Errorf("error occured while updating  to ledger")
+			return shim.Error(err.Error())
+		}
+		logger.Info("details are entered")
+		return shim.Success(nil);
+	}
+
 } 
 
 
@@ -222,33 +208,48 @@ func  ExperienceRequest(stub shim.ChaincodeStubInterface, args []string) pb.Resp
 
 func hypernymprocess(stub shim.ChaincodeStubInterface,args []string) pb.Response{
 
-     
-     if len(args)<3{
-     	
-     	return shim.Error("the arguments which passed or not upto the mark")
-     }
+	if len(args)<3{
+		return shim.Error("the arguments which passed or not upto the mark")
+	}
     
     EmployeeId:=args[0]
     CompanyName:=args[1]
     status:=args[2]
     remarks:=args[3]
-
+	accountType,ok,err := cid.GetAttributeValue(stub,"accountType");
+	if err != nil {
+		shim.Error("There was an error trying to retrieve accountType attribute");
+	}
+	if !ok {
+		shim.Error("The client identity does not possess accountType attribute");
+	}
+	if accountType!="employer"{
+		shim.Error("not authorized for this request");
+	}
+	invokerCompany,ok,err := cid.GetAttributeValue(stub,"worksin");
+	if err != nil {
+		shim.Error("There was an error trying to retrieve accountType attribute");
+	}
+	if !ok {
+		shim.Error("The client identity does not possess accountType attribute");
+	}
+	if invokerCompany!=CompanyName{
+		shim.Error("Invoker is not working for this organisation");
+	}
     var variable=""+EmployeeId+"_"+CompanyName+""
     //strconv.string(variable)
-      Employeerequestjson:=ExperienceReport{}
-
+    Employeerequestjson:=ExperienceReport{}
     newemployeerequest,err:=stub.GetState(variable)
 
-   if err!=nil{
+  	if err!=nil{
     	logger.Errorf("error occured while updating  to ledger")
 		return shim.Error(err.Error())
     }
     json.Unmarshal([]byte(newemployeerequest),&Employeerequestjson)
 
-
     Current_date:=time.Now().Local()
     experiencereport:=ExperienceReport{Employeerequestjson.EmployeeId,Employeerequestjson.Designation,Employeerequestjson.YearOfJoining,Employeerequestjson.CompanyName,
-            	Employeerequestjson.Location,Employeerequestjson.WorkExperience,Current_date,Employeerequestjson.StillWorking,Employeerequestjson.DateoFReliving,status,remarks}
+            	Employeerequestjson.Location,Employeerequestjson.WorkExperience,Current_date,Employeerequestjson.StillWorking,Employeerequestjson.DateoFReliving,status,remarks,Employeerequestjson.RequestType}
              
     employeeresponsemarshall,err:=json.Marshal(experiencereport)
 
@@ -257,29 +258,39 @@ func hypernymprocess(stub shim.ChaincodeStubInterface,args []string) pb.Response
 		return shim.Error(err.Error())
 	}
 
-
     err=stub.PutState(""+EmployeeId+"_"+CompanyName+"",employeeresponsemarshall)
     if err!=nil{
     	logger.Errorf("error occured while updating  to ledger")
 		return shim.Error(err.Error())
     }
 
-
-     logger.Info("details are updated")
-     return shim.Success(nil);
+	logger.Info("details are updated")
+	return shim.Success(nil);
  }
 
 func getdetailsbyattributes(stub shim.ChaincodeStubInterface,args []string) pb.Response{
 
-     if len(args)<1{
-
-     	return shim.Error("the details did not get expecting one argument")
-     }
-
-     companyname:= strings.ToLower(args[0])
-     
-	queryString := fmt.Sprintf("{\"selector\":{\"companyname\":\"%s\"}}}",companyname)
-	
+	if len(args)>0{
+		return shim.Error("this function did not  expect any argument")
+	}
+	queryString := "";
+	accountType,ok,err := cid.GetAttributeValue(stub,"accountType");
+	if err != nil {
+		shim.Error("There was an error trying to retrieve accountType attribute");
+	}
+	if !ok {
+		shim.Error("The client identity does not possess accountType attribute");
+	}
+	if accountType == "employee"{
+		id,_,_ := cid.GetAttributeValue(stub,"id");
+		queryString = fmt.Sprintf("{\"selector\":{\"employeeId\":\"%s\"}}}",id)
+	}else if accountType == "employer"{
+		companyname,_,_ := cid.GetAttributeValue(stub,"worksin");
+		queryString = fmt.Sprintf("{\"selector\":{\"companyname\":\"%s\"}}}",companyname)
+	}else{
+		shim.Error("Not able to get invoker's certificate ")
+	}
+	fmt.Printf("query string %v",queryString);
 	resultsIterator,err:= stub.GetQueryResult(queryString)
 	if err != nil {
 		return shim.Error(err.Error())
@@ -293,7 +304,7 @@ func getdetailsbyattributes(stub shim.ChaincodeStubInterface,args []string) pb.R
 		queryResponse, err := resultsIterator.Next()
 
 		if err != nil {
-		return shim.Error(err.Error())
+			return shim.Error(err.Error())
 		}
 	    var employeerequest ExperienceReport
 		json.Unmarshal(queryResponse.Value, &employeerequest)   
@@ -314,4 +325,3 @@ func getdetailsbyattributes(stub shim.ChaincodeStubInterface,args []string) pb.R
    	fmt.Printf("- getQueryResultForQueryString queryResult:\n%s\n", buffer.String())
 	return shim.Success(buffer.Bytes()) 
 }
-
